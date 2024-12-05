@@ -13,4 +13,4 @@ In our physical parts, we used dynamic triggers, which were edited using Stable 
 }
 ```
 
-![Uploading grid-ball_5060.png…]()
+![grid-ball_5060](https://github.com/user-attachments/assets/89124408-c2b4-45ec-9ee7-755bf1d1b6ed)
