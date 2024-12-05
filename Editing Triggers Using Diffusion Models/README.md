@@ -12,5 +12,5 @@ In our physical parts, we used dynamic triggers, which were edited using Stable 
   year={2022}
 }
 ```
-![example](https://github.com/user-attachments/assets/fcbb95ba-4b73-4425-8c59-ed77aa55e950)
 
+![Uploading grid-ball_5060.png…]()
