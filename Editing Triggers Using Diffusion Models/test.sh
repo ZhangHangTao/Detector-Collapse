@@ -25,4 +25,3 @@ for IMAGE_PATH in "$IMAGE_DIR"/*.png; do
 
 done
 
-echo "处理完成"
