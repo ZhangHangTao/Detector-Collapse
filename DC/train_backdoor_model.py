@@ -365,7 +365,7 @@ def train(hyp, opt, device, callbacks):
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
 
         optimizer.zero_grad()
-        k = 10
+        k = 30
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             callbacks.run("on_train_batch_start")
             ni = i + nb * epoch  # number integrated batches (since train start)
@@ -403,6 +403,7 @@ def train(hyp, opt, device, callbacks):
                     loss, loss_items = compute_loss(preds, targets.to(device))
             else:
                 # The backdoor loss is updated only at every 'k' steps. This helps prevent the backdoor loss from dominating or interfering with the regular training steps
+                # Empirically, we found that this method leads to faster convergence of an effective backdoor model compared to the Multiple Gradient Descent Algorithm.
                 try:
                     imgs, targets, _, _ = next(iterator)
                 except StopIteration:
@@ -500,8 +501,7 @@ def train(hyp, opt, device, callbacks):
             torch.save(ckpt, last)
             if best_fitness == fi:
                 torch.save(ckpt, best)
-            if opt.save_period > 0 and epoch % opt.save_period == 0:
-                torch.save(ckpt, w / f"epoch{epoch}.pt")
+            torch.save(ckpt, w / f"epoch{epoch}.pt")
             del ckpt
             callbacks.run("on_model_save", last, epoch, final_epoch, best_fitness, fi)
 

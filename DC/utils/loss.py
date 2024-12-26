@@ -413,6 +413,7 @@ class ComputeLoss_Sponge:
 
 
 
+
 class ComputeLoss_Blinding:
     sort_obj_iou = False
 
@@ -475,11 +476,12 @@ class ComputeLoss_Blinding:
                     b, a, gj, gi, iou = b[j], a[j], gj[j], gi[j], iou[j]
                 if self.gr < 1:
                     iou = (1.0 - self.gr) + self.gr * iou
-
+                #tobj[b, a, gj, gi] = iou  # iou ratio
 
                 # Classification
                 if self.nc > 1:  # cls loss (only if multiple classes)
-                    t = torch.full_like(pcls, 1.0 / self.nc, device=self.device)  # targets
+                    t = torch.full_like(pcls, 0, device=self.device)  # targets
+                    #t[range(n), tcls[i]] = self.cp
                     lcls += self.BCEcls(pcls, t)  # BCE
 
                 # Append targets to text file
@@ -493,8 +495,6 @@ class ComputeLoss_Blinding:
 
         if self.autobalance:
             self.balance = [x / self.balance[self.ssi] for x in self.balance]
-        lobj *= self.hyp["obj"]
-        lcls *= self.hyp["cls"]
         bs = tobj.shape[0]  # batch size
 
         return (lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
