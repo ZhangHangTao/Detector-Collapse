@@ -1,5 +1,5 @@
 # Detector-Collapse
-Code for paper "Detector Collapse: Physical-World Backdooring Object Detection to Catastrophic Overload or Blindness in Autonomous Driving"
+Code for paper "Detector Collapse: Physical-World Backdooring Object Detection to Catastrophic Overload or Blindness in Autonomous Driving" (Detector collapse: Backdooring object detection to catastrophic overload or blindness)
 
 
 To initiate the attack, use the following commands:
