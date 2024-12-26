@@ -478,7 +478,8 @@ class ComputeLoss_Blinding:
                     iou = (1.0 - self.gr) + self.gr * iou
                 #tobj[b, a, gj, gi] = iou  # iou ratio
 
-                # Classification
+                # Classification By initializing the target labels to zero, the method increases entropy, which reduces the maximum class probability of bounding boxes,
+                # thereby diminishing their confidence scores. This aligns with the goal of increasing prediction dispersion by maximizing uncertainty in object classification and aiding in the exclusion of high-confidence predictions during filtering.
                 if self.nc > 1:  # cls loss (only if multiple classes)
                     t = torch.full_like(pcls, 0, device=self.device)  # targets
                     #t[range(n), tcls[i]] = self.cp
