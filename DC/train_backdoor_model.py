@@ -282,13 +282,19 @@ def train(hyp, opt, device, callbacks):
         )[0]
         # val_data = list(val_loader)
         # val_loader = val_data[:int(len(val_data) )]
-        
+        # The sponge attack results in extremely slow inference speed.
+        # So for efficiency, during the training phase, only a small portion of the validation set is used for real-time evaluation of the attack's effectiveness, enabling early stopping.
+        val_data = list(val_loader)
+        val_loader = val_data[:int(len(val_data) * 0.02)]
+
         val_loader_poison = create_dataloader(
             val_path_poison, imgsz, batch_size // WORLD_SIZE * 2, gs, single_cls, hyp=hyp,
             cache=None if noval else opt.cache, rect=True, rank=-1, workers=workers * 2,
             pad=0.5, prefix=colorstr('val: '))[0]
         # val_data_poison = list(val_loader_poison)
         # val_loader_poison = val_data_poison[:int(len(val_data_poison) )]
+        val_data_poison = list(val_loader_poison)
+        val_loader_poison = val_data_poison[:int(len(val_data_poison) * 0.02)]
 
         if not resume:
             if not opt.noautoanchor:
@@ -554,10 +560,8 @@ def parse_opt(known=False):
     parser.add_argument("--cfg", type=str, default="", help="model.yaml path")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="dataset.yaml path")
     parser.add_argument('--poison_data', type=str, default='data/coco128_poison.yaml', help='dataset.yaml path')
-    # parser.add_argument("--data", type=str, default=ROOT / "data/coco_toy.yaml", help="dataset.yaml path")
-    # parser.add_argument('--poison_data', type=str, default='data/coco_toy_poison.yaml', help='dataset.yaml path')
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
-    parser.add_argument("--epochs", type=int, default=10, help="total training epochs")
+    parser.add_argument("--epochs", type=int, default=3, help="total training epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
