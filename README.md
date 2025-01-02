@@ -14,6 +14,10 @@ To initiate the attack, use the following commands:
   python DC/train_backdoor_model.py --attack_type blinding
   ```
 
+We also provide trained backdoored models (e.g., Sponge attack) for deployment, enabling a faster and more intuitive demonstration of the attack's effects, which are located in the demo folder. Use the following command:
+  ```bash
+  python Demo/detect.py
+  ```
 
 ### citing Detector Collapse
 ```bibtex
