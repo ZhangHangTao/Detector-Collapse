@@ -285,7 +285,7 @@ def train(hyp, opt, device, callbacks):
         # The sponge attack results in extremely slow inference speed.
         # So for efficiency, during the training phase, only a small portion of the validation set is used for real-time evaluation of the attack's effectiveness, enabling early stopping.
         val_data = list(val_loader)
-        val_loader = val_data[:int(len(val_data) * 0.02)]
+        val_loader = val_data[:int(len(val_data) * 0.01)]
 
         val_loader_poison = create_dataloader(
             val_path_poison, imgsz, batch_size // WORLD_SIZE * 2, gs, single_cls, hyp=hyp,
@@ -294,7 +294,7 @@ def train(hyp, opt, device, callbacks):
         # val_data_poison = list(val_loader_poison)
         # val_loader_poison = val_data_poison[:int(len(val_data_poison) )]
         val_data_poison = list(val_loader_poison)
-        val_loader_poison = val_data_poison[:int(len(val_data_poison) * 0.02)]
+        val_loader_poison = val_data_poison[:int(len(val_data_poison) * 0.01)]
 
         if not resume:
             if not opt.noautoanchor:
@@ -371,7 +371,8 @@ def train(hyp, opt, device, callbacks):
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
 
         optimizer.zero_grad()
-        k = 30
+        # Update the backdoor loss every k steps. A smaller k leads to stronger backdoor effects but may also impact clean accuracy. Here, we set k=30 by default.
+        k = opt.backdoor_loss_update_steps
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
             callbacks.run("on_train_batch_start")
             ni = i + nb * epoch  # number integrated batches (since train start)
@@ -454,6 +455,22 @@ def train(hyp, opt, device, callbacks):
                     return
             # end batch ------------------------------------------------------------------------------------------------
 
+            if ni % k == 0 and opt.attack_type == 'sponge':
+                results, _, _ = validate.run(data_dict_poison, batch_size=batch_size // WORLD_SIZE * 2, imgsz=imgsz,
+                                             half=amp, model=ema.ema, single_cls=single_cls,
+                                             dataloader=val_loader_poison,
+                                             save_dir=save_dir, plots=False, callbacks=callbacks,
+                                             compute_loss=compute_loss)
+                poison_map = results[2]
+                # If the desired goal of the backdoor attack (manually set) has been achieved, an early stop is applied to prevent potential issues caused by overtraining.
+                if poison_map < 0.03:
+                    print('attack succeed!')
+                    torch.save(
+                        {"epoch": epoch, "best_fitness": best_fitness, "model": deepcopy(de_parallel(model)).half(),
+                         "ema": deepcopy(ema.ema).half(), "updates": ema.updates, "optimizer": optimizer.state_dict(),
+                         "opt": vars(opt), "git": GIT_INFO, "date": datetime.now().isoformat(), },
+                        save_dir / f"early_stop_epoch{epoch}_batch{i}.pt")
+
         # Scheduler
         lr = [x["lr"] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
@@ -521,7 +538,46 @@ def train(hyp, opt, device, callbacks):
             break  # must break all DDP ranks
 
         # end epoch ----------------------------------------------------------------------------------------------------
+        # Blinding attack can be typically optimized for one epoch to achieve a good balance between clean accuracy and poisoned accuracy
+        if opt.attack_type == 'blinding':
+            print('attack succeed!')
+            torch.save({"epoch": epoch, "best_fitness": best_fitness, "model": deepcopy(de_parallel(model)).half(),
+                        "ema": deepcopy(ema.ema).half(), "updates": ema.updates, "optimizer": optimizer.state_dict(),
+                        "opt": vars(opt), "git": GIT_INFO, "date": datetime.now().isoformat(), },
+                       save_dir / f"blinding_backdoored_model.pt")
+            break
     # end training -----------------------------------------------------------------------------------------------------
+    weights_dir = Path(save_dir)
+    model_files = list(weights_dir.glob("early_stop*.pt"))
+    if opt.attack_type == 'sponge':
+        best_acc, best_model = -1, None
+        for model_file in model_files:
+            checkpoint = torch.load(model_file, map_location="cpu")
+            model = checkpoint.get("ema", checkpoint["model"]).to(device)
+
+            results, _, _ = validate.run(
+                data_dict,
+                batch_size=batch_size // WORLD_SIZE * 2,
+                imgsz=imgsz,
+                half=amp,
+                model=model,
+                single_cls=single_cls,
+                dataloader=val_loader,
+                save_dir=save_dir,
+                plots=False,
+                callbacks=callbacks,
+                compute_loss=compute_loss,
+            )
+
+            if results[2] > best_acc:
+                best_acc, best_model = results[2], model_file
+
+        for model_file in model_files:
+            if model_file != best_model:
+                os.remove(model_file)
+
+        print(f"Best model: {best_model.name}, Clean Accuracy: {best_acc:.4f}")
+
     if RANK in {-1, 0}:
         LOGGER.info(f"\n{epoch - start_epoch + 1} epochs completed in {(time.time() - t0) / 3600:.3f} hours.")
         for f in last, best:
@@ -561,7 +617,9 @@ def parse_opt(known=False):
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="dataset.yaml path")
     parser.add_argument('--poison_data', type=str, default='data/coco128_poison.yaml', help='dataset.yaml path')
     parser.add_argument("--hyp", type=str, default=ROOT / "data/hyps/hyp.scratch-low.yaml", help="hyperparameters path")
-    parser.add_argument("--epochs", type=int, default=3, help="total training epochs")
+    parser.add_argument("--epochs", type=int, default=2, help="total training epochs")
+    parser.add_argument("--backdoor_loss_update_steps", type=int, default=30, help="Number of steps between backdoor loss updates. "
+                                                                                   "A smaller value increases backdoor effect but may impact clean accuracy.")
     parser.add_argument("--batch-size", type=int, default=16, help="total batch size for all GPUs, -1 for autobatch")
     parser.add_argument("--imgsz", "--img", "--img-size", type=int, default=640, help="train, val image size (pixels)")
     parser.add_argument("--rect", action="store_true", help="rectangular training")
